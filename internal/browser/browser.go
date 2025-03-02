@@ -76,21 +76,10 @@ func New(cfg config.Config) {
 	page.MustElement("#TicketForm_agree").MustClick()
 
 	// step 6: solve captcha
-	img := page.MustElement("#TicketForm_verifyCode-image")
-	imgBytes, err := img.Screenshot(proto.PageCaptureScreenshotFormatPng, 1000)
-	os.WriteFile("captcha.png", imgBytes, 0644)
-
+	captchaText, err := solveCaptcha(page, 1)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	out, err := exec.Command("tesseract", "captcha.png", "stdout", "--psm", "7").Output()
-	if err != nil {
-		log.Println("Error in solving captcha")
-		log.Fatal(err)
-	}
-	captchaText := strings.TrimSpace(string(out))
-	log.Printf("Captcha solved: %s\n", captchaText)
 
 	inputField := page.MustElement("#TicketForm_verifyCode")
 	inputField.MustClick()
@@ -103,4 +92,30 @@ func New(cfg config.Config) {
 
 	// page.MustWaitLoad()
 	select {}
+}
+
+func solveCaptcha(page *rod.Page, maxRetry int) (string, error) {
+	for attempt := 0; attempt < maxRetry; attempt++ {
+		img := page.MustElement("#TicketForm_verifyCode-image")
+		img.MustWaitVisible()
+		imgBytes, err := img.Screenshot(proto.PageCaptureScreenshotFormatPng, 1000)
+		if err != nil {
+			return "", err
+		}
+		os.WriteFile("captcha.png", imgBytes, 0644)
+
+		out, err := exec.Command("tesseract", "captcha.png", "stdout", "--psm", "7").Output()
+		if err != nil {
+			log.Println("Error in solving captcha")
+			log.Fatal(err)
+		}
+		captchaText := strings.TrimSpace(string(out))
+		log.Printf("Captcha solved: %s\n", captchaText)
+
+		if len(captchaText) == 4 {
+			return captchaText, nil
+		}
+	}
+	log.Fatal("Failed to solve captcha after maximum retries")
+	return "", fmt.Errorf("Failed to solve captcha after maximum retries")
 }
