@@ -21,6 +21,7 @@ func New(cfg config.Config) {
 	u := launcher.New().Bin(cfg.Browser_Path).Headless(false).MustLaunch()
 	browser := rod.New().ControlURL(u).MustConnect()
 	defer browser.MustClose() // Close browser on exit
+
 	page := browser.MustPage(("https://tixcraft.com/"))
 	page.MustWaitLoad()
 	log.Println("Tixcraft page loaded successfully")
@@ -38,38 +39,40 @@ func New(cfg config.Config) {
 
 	// step 3: select ticket area
 	xpathQuery = fmt.Sprintf(`//li[@class='select_form_a' or @class='select_form_b'][a[contains(text(), '%s')]]`, cfg.Price)
-
 	rows := page.MustElementsX(xpathQuery) // might be multiple
-	log.Printf("Find %d results\n", len(rows))
+
+	found := false
 	for _, element := range rows {
 		span := element.MustElement("span")
 		spanText := strings.TrimSpace(span.MustText())
-		var found bool = false
 
-		// Check if spanText contains any valid word (fast lookup)
+		// Ensure no exclusion words exist
+		exclude := false
 		for _, word := range cfg.Exclude {
-			log.Printf("Checking %s\n", spanText)
-			if !strings.Contains(spanText, word) {
-				log.Printf("Select on %s\n", spanText)
-				// Click the <a> inside this <li>
-				element.MustElement("a").MustClick()
-				found = true
+			if strings.Contains(spanText, word) {
+				exclude = true
 				break
 			}
 		}
 
-		if found {
+		if !exclude {
+			element.MustElement("a").MustClick()
+			found = true
 			break
 		}
 	}
-	log.Println("Ticket area selected")
+	if found {
+		log.Println("Ticket area selected")
+	} else {
+		log.Fatal("Ticket area not found")
+	}
 
 	// step 4: select ticket number
 	ticketSelect := page.MustElement("select.form-select.mobile-select")
 	ticketSelect.MustSelect(cfg.Ticket_number)
 	log.Println("Ticket number selected")
 
-	// step 5: fill the check box
+	// step 5: fill the check box (agree to terms)
 	page.MustElement("#TicketForm_agree").MustClick()
 
 	// step 6: solve captcha
@@ -88,12 +91,12 @@ func New(cfg config.Config) {
 	}
 	captchaText := strings.TrimSpace(string(out))
 	log.Printf("Captcha solved: %s\n", captchaText)
+
 	inputField := page.MustElement("#TicketForm_verifyCode")
 	inputField.MustClick()
 	inputField.MustInput(captchaText)
 	inputField.MustType(input.Enter)
-
-	log.Println("Captcha solved")
+	log.Println("Captcha submitted")
 
 	// step 7: click on submit
 	page.MustElement("button.btn.btn-primary.btn-green").MustClick()
