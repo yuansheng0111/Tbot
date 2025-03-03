@@ -76,7 +76,7 @@ func New(cfg config.Config) {
 	page.MustElement("#TicketForm_agree").MustClick()
 
 	// step 6: solve captcha
-	captchaText, err := solveCaptcha(page, 1)
+	captchaText, err := solveCaptcha(page, 10)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,6 +98,8 @@ func solveCaptcha(page *rod.Page, maxRetry int) (string, error) {
 	for attempt := 0; attempt < maxRetry; attempt++ {
 		img := page.MustElement("#TicketForm_verifyCode-image")
 		img.MustWaitVisible()
+		img.MustWaitStable()
+		img.MustWaitLoad()
 		imgBytes, err := img.Screenshot(proto.PageCaptureScreenshotFormatPng, 1000)
 		if err != nil {
 			return "", err
@@ -115,6 +117,7 @@ func solveCaptcha(page *rod.Page, maxRetry int) (string, error) {
 		if len(captchaText) == 4 {
 			return captchaText, nil
 		}
+		img.MustClick()
 	}
 	log.Fatal("Failed to solve captcha after maximum retries")
 	return "", fmt.Errorf("Failed to solve captcha after maximum retries")
