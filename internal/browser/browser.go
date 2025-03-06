@@ -22,7 +22,7 @@ func New(cfg config.Config) {
 	browser := rod.New().ControlURL(u).MustConnect()
 	defer browser.MustClose() // Close browser on exit
 
-	page := browser.MustPage(("https://tixcraft.com/"))
+	page := browser.MustPage(cfg.URL)
 	page.MustWaitLoad()
 	log.Println("Tixcraft page loaded successfully")
 
@@ -41,7 +41,7 @@ func New(cfg config.Config) {
 	xpathQuery = fmt.Sprintf(`//li[@class='select_form_a' or @class='select_form_b'][a[contains(text(), '%s')]]`, cfg.Price)
 	rows := page.MustElementsX(xpathQuery) // might be multiple
 
-	found := false
+	var selectedArea *rod.Element
 	for _, element := range rows {
 		span := element.MustElement("span")
 		spanText := strings.TrimSpace(span.MustText())
@@ -56,16 +56,16 @@ func New(cfg config.Config) {
 		}
 
 		if !exclude {
-			element.MustElement("a").MustClick()
-			found = true
+			selectedArea = element
 			break
 		}
 	}
-	if found {
-		log.Println("Ticket area selected")
-	} else {
+
+	if selectedArea == nil {
 		log.Fatal("Ticket area not found")
 	}
+
+	selectedArea.MustElement("a").MustClick()
 
 	// step 4: select ticket number
 	ticketSelect := page.MustElement("select.form-select.mobile-select")
@@ -97,8 +97,8 @@ func New(cfg config.Config) {
 func solveCaptcha(page *rod.Page, maxRetry int) (string, error) {
 	for attempt := 0; attempt < maxRetry; attempt++ {
 		img := page.MustElement("#TicketForm_verifyCode-image")
-		img.MustWaitVisible()
-		img.MustWaitStable()
+		// img.MustWaitVisible()
+		// img.MustWaitStable()
 		img.MustWaitLoad()
 		imgBytes, err := img.Screenshot(proto.PageCaptureScreenshotFormatPng, 1000)
 		if err != nil {
